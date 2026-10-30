@@ -11,6 +11,8 @@ Every agent connects with its own UUID token. The token selects the agent's data
 - MCP endpoint (`/mcp`): token is taken from the `Authorization: Bearer <token>` header or the `X-Access-Token` header.
 - REST endpoint (`/api/query`): the token is the **SHA-256 hex hash** of the agent's UUID token (so the agent never exposes its real token in shared links).
 
+The agent never sees its own token: it is supplied by the MCP client in headers and no tool ever returns it. The only secret the agent can obtain — and share with the user — is the SHA-256 hash via the `get_connection_info` tool, which works only on the read-only REST endpoint.
+
 ## Tool
 
 ### `memory`
@@ -102,7 +104,7 @@ docker compose exec memory-db psql -U postgres -c "CREATE DATABASE agent_beta OW
 
 The public URL (where the server is reachable) is taken from the `PUBLIC_URL` environment variable or `memory.public-url`; it is published to agents via server instructions so they can build user-facing links: `POST {PUBLIC_URL}/api/query` + `X-Access-Token: sha256(agent token)`.
 
-Compute the public read-only token for an agent:
+Compute the public read-only token for an agent (or ask the agent to call `get_connection_info` — it returns the ready-to-use credentials):
 
 ```bash
 echo -n "3f2a9c8e-6c1d-4a2b-9e7f-1b2c3d4e5f60" | sha256sum

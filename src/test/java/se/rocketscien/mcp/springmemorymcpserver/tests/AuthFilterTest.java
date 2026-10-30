@@ -68,7 +68,7 @@ class AuthFilterTest extends BaseApplicationTest {
     void instructionsMentionReadOnlyEndpoint() throws Exception {
         var response = post(ALPHA_TOKEN, INITIALIZE, null);
 
-        assertThat(response.body()).contains("/api/query");
-        assertThat(response.body()).contains("SHA-256");
+        assertThat(response.body()).contains("get_connection_info");
+        assertThat(response.body()).doesNotContain("${memory.public-url}");
     }
 }

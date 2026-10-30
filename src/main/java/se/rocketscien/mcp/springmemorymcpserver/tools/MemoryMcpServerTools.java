@@ -21,9 +21,33 @@ public class MemoryMcpServerTools {
 
     private final TokenAuthFilter tokenAuthFilter;
 
-    public MemoryMcpServerTools(AgentConnectionsManager connectionsManager, TokenAuthFilter tokenAuthFilter) {
+    private final se.rocketscien.mcp.springmemorymcpserver.config.MemoryConfig memoryConfig;
+
+    public MemoryMcpServerTools(AgentConnectionsManager connectionsManager, TokenAuthFilter tokenAuthFilter,
+                                se.rocketscien.mcp.springmemorymcpserver.config.MemoryConfig memoryConfig) {
         this.connectionsManager = connectionsManager;
         this.tokenAuthFilter = tokenAuthFilter;
+        this.memoryConfig = memoryConfig;
+    }
+
+    @Tool(
+            name = "get_connection_info",
+            description = "Public read-only credentials for sharing memory data with the user. " +
+                    "Returns the public query endpoint and the SHA-256 hex hash of your access token: " +
+                    "call this endpoint with POST, header X-Access-Token set to the hash and body {\"query\": \"<SQL SELECT>\"}. " +
+                    "It is strictly read-only (enforced by PostgreSQL READ ONLY transaction) and safe to embed into " +
+                    "HTML pages and dashboards for the user. Never expose your raw access token - only this hash."
+    )
+    public Map<String, Object> getConnectionInfo() {
+        var agent = tokenAuthFilter.currentAgent();
+        if (agent == null) {
+            return Map.of("error", "Unauthorized: missing or invalid access token");
+        }
+
+        return Map.of(
+                "endpoint", memoryConfig.getPublicUrl() + "/api/query",
+                "authentication", TokenAuthFilter.sha256Hex(agent.token())
+        );
     }
 
     @Tool(

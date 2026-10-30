@@ -30,10 +30,11 @@ spring:
           Mandatory convention: every object you create - tables, columns, indexes, views, procedures -
           must get a COMMENT (COMMENT ON TABLE / COLUMN / INDEX / VIEW / FUNCTION) explaining its purpose,
           so any future session can understand the schema without guessing.
-          Sharing results with the user: the public read-only endpoint
-          POST ${memory.public-url}/api/query accepts {"query": "<SQL SELECT>"} with header
-          X-Access-Token set to the SHA-256 hex hash of your access token and returns JSON rows.
-          You may embed this endpoint into HTML pages or dashboards you build for the user.
+          Sharing results with the user: call the get_connection_info tool - it returns the public read-only
+          endpoint and the SHA-256 token to use with it. Then POST {"query": "<SQL SELECT>"} to that endpoint
+          with header X-Access-Token set to the returned token; it returns JSON rows. Never expose your raw
+          access token - only the hash from get_connection_info. You may embed this endpoint into HTML pages
+          or dashboards you build for the user.
         capabilities:
           tool: true
           prompt: false

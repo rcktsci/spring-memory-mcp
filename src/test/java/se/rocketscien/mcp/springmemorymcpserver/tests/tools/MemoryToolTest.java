@@ -1,5 +1,7 @@
 package se.rocketscien.mcp.springmemorymcpserver.tests.tools;
 
+import java.util.HexFormat;
+
 import org.junit.jupiter.api.Test;
 
 import se.rocketscien.mcp.springmemorymcpserver.tests.BaseCallToolTest;
@@ -57,6 +59,25 @@ class MemoryToolTest extends BaseCallToolTest {
         var response = memory(ALPHA_TOKEN, "CREATE EXTENSION IF NOT EXISTS pg_trgm");
 
         assertThat(getResponseJson(response).has("error")).isFalse();
+    }
+
+    @Test
+    void getConnectionInfoReturnsEndpointAndSha256OfToken() {
+        var response = callTool(ALPHA_TOKEN, "get_connection_info", java.util.Map.of());
+
+        var json = getResponseJson(response);
+        assertThat(json.get("endpoint").asText()).isEqualTo("http://localhost:8080/api/query");
+
+        String sha;
+        try {
+            sha = HexFormat.of().formatHex(
+                    java.security.MessageDigest.getInstance("SHA-256")
+                            .digest(ALPHA_TOKEN.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+        assertThat(json.get("authentication").asText()).isEqualTo(sha);
+        assertThat(response).doesNotContain(ALPHA_TOKEN);
     }
 
     @Test
