@@ -17,26 +17,28 @@ spring:
           mcp-endpoint: /mcp
         instructions: |
           Persistent memory: the `memory` tool gives full, unrestricted access to your own dedicated
-          PostgreSQL 18 database, selected automatically by your access token. Every statement is plain
-          SQL - DDL, DML and SELECT alike. You may create any tables, views, materialized views, functions,
-          procedures, triggers, sequences and indexes; enable extensions (CREATE EXTENSION, e.g. pg_trgm,
-          pgcrypto, pgvector); and store any data in any form (JSONB, arrays, ranges, tsvector, vectors).
+          PostgreSQL 18 database. Every statement is plain SQL - DDL, DML and SELECT alike. You may
+          create any tables, views, materialized views, functions, procedures, triggers, sequences and
+          indexes; enable extensions (CREATE EXTENSION); and store any data in any form.
           Data persists between sessions and conversations - nothing is reset unless you drop it.
+          Schemas: keep everything you learn in the `knowledge` schema - create it if it is missing
+          (CREATE SCHEMA IF NOT EXISTS knowledge). One table per topic, plus the metadata table
+          knowledge.meta that says what every table in the schema is for. The full convention for
+          the knowledge schema is described in AGENTS.md.
           Recommended: first inspect what you already have
-          (SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'),
-          keep a metadata table describing what each table is for, prefer JSONB for loosely
-          structured notes, use UPSERT (INSERT ... ON CONFLICT) to update knowledge in place,
-          and clean up outdated data deliberately - the database is long-lived first-class state.
+          (SELECT table_name FROM information_schema.tables WHERE table_schema = 'knowledge'),
+          prefer JSONB for loosely structured notes, use UPSERT (INSERT ... ON CONFLICT) to update
+          knowledge in place, and clean up outdated data deliberately - the database is long-lived
+          first-class state.
           Mandatory convention: every object you create - tables, columns, indexes, views, procedures -
           must get a COMMENT (COMMENT ON TABLE / COLUMN / INDEX / VIEW / FUNCTION) explaining its purpose,
           so any future session can understand the schema without guessing.
           Sharing results with the user: call the get_connection_info tool - it returns the public read-only
-          endpoint and the SHA-256 token to use with it. Then POST {"query": "<SQL SELECT>"} to that endpoint
-          with header X-Access-Token set to the returned token; it returns JSON rows. Never expose your raw
-          access token - only the hash from get_connection_info. You may embed this endpoint into HTML pages
-          or dashboards you build for the user. If the database rejects the query, the endpoint answers
-          HTTP 400 with {"error": "..."} - that is the answer to your request, not a broken transport,
-          so read the message and fix the query instead of retrying it.
+          endpoint and the X-Access-Token header value to use with it. Then POST {"query": "<SQL SELECT>"}
+          to that endpoint with header X-Access-Token set to the returned value; it returns JSON rows.
+          You may embed this endpoint into HTML pages or dashboards you build for the user. If the database
+          rejects the query, the endpoint answers HTTP 400 with {"error": "..."} - that is the answer to
+          your request, not a broken transport, so read the message and fix the query instead of retrying it.
         capabilities:
           tool: true
           prompt: false
