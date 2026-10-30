@@ -35,7 +35,15 @@ curl -X POST https://<host>/api/query \
   -d '{"query": "SELECT * FROM notes"}'
 ```
 
-Response: `{ "rows": [...], "rowCount": N }` or `{ "error": "message" }`.
+Response: `{ "rows": [...], "rowCount": N }` on success (`200`).
+
+On failure the status code says what happened, and the body carries the message:
+
+| Status | Meaning |
+|--------|---------|
+| `400`  | The database rejected the query: read-only transaction, broken SQL |
+| `401`  | Missing or invalid access token |
+| `503`  | The database cannot be reached - the request can be retried |
 
 CORS is open on `/api/**` so the endpoint can be used from browser pages.
 

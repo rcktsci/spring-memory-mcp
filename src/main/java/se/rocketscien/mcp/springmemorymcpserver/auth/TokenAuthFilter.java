@@ -1,5 +1,7 @@
 package se.rocketscien.mcp.springmemorymcpserver.auth;
 
+import java.io.IOException;
+
 import jakarta.servlet.Filter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -8,30 +10,22 @@ import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
+import org.springframework.http.server.PathContainer;
 import org.springframework.stereotype.Component;
+import org.springframework.web.util.ServletRequestPathUtils;
 
-import se.rocketscien.mcp.springmemorymcpserver.config.MemoryConfig;
 import se.rocketscien.mcp.springmemorymcpserver.config.MemoryConfig.AgentConfig;
+import se.rocketscien.mcp.springmemorymcpserver.connections.AuthService;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 
 @Component
 public class TokenAuthFilter implements Filter {
 
-    private final ThreadLocal<AgentConfig> currentAgent = new ThreadLocal<>();
+    private final AuthService authService;
 
-    private final MemoryConfig memoryConfig;
-
-    public TokenAuthFilter(MemoryConfig memoryConfig) {
-        this.memoryConfig = memoryConfig;
-    }
-
-    public AgentConfig currentAgent() {
-        return currentAgent.get();
+    public TokenAuthFilter(AuthService authService) {
+        this.authService = authService;
     }
 
     @Override
@@ -52,21 +46,46 @@ public class TokenAuthFilter implements Filter {
             return;
         }
 
-        AgentConfig agent = httpRequest.getRequestURI().startsWith("/api/")
-                ? findByTokenHash(token)
-                : findByToken(token);
+        // The token kind follows the path the request is actually routed to, not the raw request target:
+        // the raw target is undecoded, so it can spell a path differently than the one the router uses.
+        // The MCP endpoint takes the agent token, the read-only API takes the SHA-256 hash of it.
+        AgentConfig agent = routedPath(httpRequest).startsWith("/api/")
+                ? authService.resolveByTokenHash(token)
+                : authService.resolve(token);
 
         if (agent == null) {
             unauthorized(httpResponse, "Invalid token");
             return;
         }
 
-        currentAgent.set(agent);
         try {
-            chain.doFilter(request, response);
-        } finally {
-            currentAgent.remove();
+            ScopedValue.where(AuthService.CURRENT, agent)
+                    .call(() -> {
+                        chain.doFilter(request, response);
+                        return null;
+                    });
+        } catch (ServletException | IOException | RuntimeException | Error e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
         }
+    }
+
+    /**
+     * The path as the {@code DispatcherServlet} routes it: the same one the router uses - percent-decoded,
+     * matrix parameters stripped, without the context path. {@code getRequestURI()} must not be used here,
+     * it is the raw undecoded request target and can spell the path differently than the router does.
+     */
+    private static String routedPath(HttpServletRequest request) {
+        var path = ServletRequestPathUtils.parse(request).pathWithinApplication();
+
+        var routed = new StringBuilder();
+        for (PathContainer.Element element : path.elements()) {
+            if (element instanceof PathContainer.PathSegment segment) {
+                routed.append('/').append(segment.valueToMatch());
+            }
+        }
+        return routed.isEmpty() ? "/" : routed.toString();
     }
 
     private String extractToken(HttpServletRequest request) {
@@ -75,35 +94,6 @@ public class TokenAuthFilter implements Filter {
             return auth.substring(7).trim();
         }
         return request.getHeader("X-Access-Token");
-    }
-
-    private AgentConfig findByToken(String token) {
-        for (var agent : memoryConfig.getAgents()) {
-            if (MessageDigest.isEqual(agent.token().getBytes(StandardCharsets.UTF_8),
-                    token.getBytes(StandardCharsets.UTF_8))) {
-                return agent;
-            }
-        }
-        return null;
-    }
-
-    private AgentConfig findByTokenHash(String tokenHash) {
-        for (var agent : memoryConfig.getAgents()) {
-            if (MessageDigest.isEqual(sha256Hex(agent.token()).getBytes(StandardCharsets.UTF_8),
-                    tokenHash.getBytes(StandardCharsets.UTF_8))) {
-                return agent;
-            }
-        }
-        return null;
-    }
-
-    public static String sha256Hex(String value) {
-        try {
-            var digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
     }
 
     private static void unauthorized(HttpServletResponse response, String message) throws IOException {

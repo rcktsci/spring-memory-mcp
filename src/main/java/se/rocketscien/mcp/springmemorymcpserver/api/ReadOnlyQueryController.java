@@ -1,15 +1,20 @@
 package se.rocketscien.mcp.springmemorymcpserver.api;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
-import se.rocketscien.mcp.springmemorymcpserver.auth.TokenAuthFilter;
 import se.rocketscien.mcp.springmemorymcpserver.config.MemoryConfig.AgentConfig;
+import se.rocketscien.mcp.springmemorymcpserver.connections.AuthService;
 import se.rocketscien.mcp.springmemorymcpserver.connections.AgentConnectionsManager;
 
 import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+import java.sql.SQLNonTransientConnectionException;
+import java.sql.SQLTransientConnectionException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -21,16 +26,16 @@ public class ReadOnlyQueryController {
 
     private final AgentConnectionsManager connectionsManager;
 
-    private final TokenAuthFilter tokenAuthFilter;
+    private final AuthService authService;
 
     public record QueryRequest(String query) {
     }
 
     @PostMapping("/api/query")
-    public Map<String, Object> query(@RequestBody QueryRequest request) {
-        AgentConfig agent = tokenAuthFilter.currentAgent();
+    public ResponseEntity<Map<String, Object>> query(@RequestBody QueryRequest request) {
+        AgentConfig agent = authService.current();
         if (agent == null) {
-            return Map.of("error", "Unauthorized");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Unauthorized"));
         }
 
         try (var connection = connectionsManager.getDataSource(agent).getConnection()) {
@@ -56,13 +61,38 @@ public class ReadOnlyQueryController {
                     var response = new LinkedHashMap<String, Object>();
                     response.put("rows", rows);
                     response.put("rowCount", rows.size());
-                    return response;
+                    return ResponseEntity.ok(response);
                 }
             } finally {
                 connection.rollback();
             }
         } catch (Exception e) {
-            return Map.of("error", e.getMessage());
+            // The error is reported with a non-2xx status: a rejected query (read-only, bad SQL)
+            // must not look like a successful response to the caller. A database that cannot be
+            // reached is not the caller's mistake, so it gets 503 and can be retried.
+            var status = isConnectionFailure(e) ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.BAD_REQUEST;
+            var message = e.getMessage() != null ? e.getMessage() : e.toString();
+            return ResponseEntity.status(status).body(Map.of("error", message));
         }
+    }
+
+    /**
+     * SQLState class 08 is "connection exception", 53 is "insufficient resources" and 57P01/57P03 mean
+     * that the server is shutting down: in all of them the request can be retried later.
+     */
+    private static boolean isConnectionFailure(Exception e) {
+        for (Throwable cause = e; cause != null; cause = cause.getCause()) {
+            if (cause instanceof SQLTransientConnectionException || cause instanceof SQLNonTransientConnectionException) {
+                return true;
+            }
+            if (cause instanceof SQLException sqlException) {
+                var sqlState = sqlException.getSQLState();
+                if (sqlState != null && (sqlState.startsWith("08") || sqlState.startsWith("53")
+                        || sqlState.equals("57P01") || sqlState.equals("57P03"))) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }

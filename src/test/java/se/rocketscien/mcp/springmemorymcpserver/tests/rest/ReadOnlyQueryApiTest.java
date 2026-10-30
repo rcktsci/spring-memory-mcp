@@ -3,9 +3,7 @@ package se.rocketscien.mcp.springmemorymcpserver.tests.rest;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.security.MessageDigest;
 import java.time.Duration;
-import java.util.HexFormat;
 
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,6 +34,14 @@ class ReadOnlyQueryApiTest extends BaseCallToolTest {
     }
 
     @Test
+    void brokenSqlIsRejectedAsBadRequest() {
+        var response = postApi(sha256Hex(ALPHA_TOKEN), "SELECT * FROM no_such_table");
+
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(response.body()).contains("error");
+    }
+
+    @Test
     void rawUuidTokenIsRejected() {
         assertThat(postApi(ALPHA_TOKEN, "SELECT 1").statusCode()).isEqualTo(401);
     }
@@ -54,6 +60,7 @@ class ReadOnlyQueryApiTest extends BaseCallToolTest {
     void insertIsRejectedByDatabase() {
         var response = postApi(sha256Hex(ALPHA_TOKEN), "INSERT INTO api_notes (note) VALUES ('nope')");
 
+        assertThat(response.statusCode()).isEqualTo(400);
         assertThat(response.body()).contains("read-only");
         assertThat(rowCount(ALPHA_DB, "api_notes")).isEqualTo(1);
     }
@@ -62,6 +69,7 @@ class ReadOnlyQueryApiTest extends BaseCallToolTest {
     void deleteAppendedToSelectIsRejected() {
         var response = postApi(sha256Hex(ALPHA_TOKEN), "SELECT 1; DELETE FROM api_notes");
 
+        assertThat(response.statusCode()).isEqualTo(400);
         assertThat(response.body()).contains("read-only");
         assertThat(rowCount(ALPHA_DB, "api_notes")).isEqualTo(1);
     }
@@ -71,6 +79,7 @@ class ReadOnlyQueryApiTest extends BaseCallToolTest {
         var response = postApi(sha256Hex(ALPHA_TOKEN),
                 "WITH d AS (DELETE FROM api_notes RETURNING *) SELECT * FROM d");
 
+        assertThat(response.statusCode()).isEqualTo(400);
         assertThat(response.body()).contains("read-only");
         assertThat(rowCount(ALPHA_DB, "api_notes")).isEqualTo(1);
     }
@@ -79,6 +88,7 @@ class ReadOnlyQueryApiTest extends BaseCallToolTest {
     void dropTableIsRejected() {
         var response = postApi(sha256Hex(ALPHA_TOKEN), "DROP TABLE api_notes");
 
+        assertThat(response.statusCode()).isEqualTo(400);
         assertThat(response.body()).contains("read-only");
     }
 
@@ -97,14 +107,5 @@ class ReadOnlyQueryApiTest extends BaseCallToolTest {
         }
 
         return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
-    }
-
-    private static String sha256Hex(String value) {
-        try {
-            var digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(value.getBytes()));
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
     }
 }

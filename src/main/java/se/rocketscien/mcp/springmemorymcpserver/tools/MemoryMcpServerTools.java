@@ -4,9 +4,10 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Service;
 
-import se.rocketscien.mcp.springmemorymcpserver.auth.TokenAuthFilter;
+import se.rocketscien.mcp.springmemorymcpserver.config.MemoryConfig;
 import se.rocketscien.mcp.springmemorymcpserver.config.MemoryConfig.AgentConfig;
 import se.rocketscien.mcp.springmemorymcpserver.connections.AgentConnectionsManager;
+import se.rocketscien.mcp.springmemorymcpserver.connections.AuthService;
 
 import java.sql.ResultSetMetaData;
 import java.util.ArrayList;
@@ -19,14 +20,14 @@ public class MemoryMcpServerTools {
 
     private final AgentConnectionsManager connectionsManager;
 
-    private final TokenAuthFilter tokenAuthFilter;
+    private final AuthService authService;
 
-    private final se.rocketscien.mcp.springmemorymcpserver.config.MemoryConfig memoryConfig;
+    private final MemoryConfig memoryConfig;
 
-    public MemoryMcpServerTools(AgentConnectionsManager connectionsManager, TokenAuthFilter tokenAuthFilter,
-                                se.rocketscien.mcp.springmemorymcpserver.config.MemoryConfig memoryConfig) {
+    public MemoryMcpServerTools(AgentConnectionsManager connectionsManager, AuthService authService,
+                                MemoryConfig memoryConfig) {
         this.connectionsManager = connectionsManager;
-        this.tokenAuthFilter = tokenAuthFilter;
+        this.authService = authService;
         this.memoryConfig = memoryConfig;
     }
 
@@ -36,17 +37,19 @@ public class MemoryMcpServerTools {
                     "Returns the public query endpoint and the SHA-256 hex hash of your access token: " +
                     "call this endpoint with POST, header X-Access-Token set to the hash and body {\"query\": \"<SQL SELECT>\"}. " +
                     "It is strictly read-only (enforced by PostgreSQL READ ONLY transaction) and safe to embed into " +
-                    "HTML pages and dashboards for the user. Never expose your raw access token - only this hash."
+                    "HTML pages and dashboards for the user. Never expose your raw access token - only this hash. " +
+                    "A query the database rejects answers HTTP 400 with {\"error\": \"...\"}: that is the answer to " +
+                    "your request, not a broken transport - read the message and fix the query instead of retrying it."
     )
     public Map<String, Object> getConnectionInfo() {
-        var agent = tokenAuthFilter.currentAgent();
+        var agent = authService.current();
         if (agent == null) {
             return Map.of("error", "Unauthorized: missing or invalid access token");
         }
 
         return Map.of(
                 "endpoint", memoryConfig.getPublicUrl() + "/api/query",
-                "authentication", TokenAuthFilter.sha256Hex(agent.token())
+                "authentication", AuthService.sha256Hex(agent.token())
         );
     }
 
@@ -63,7 +66,7 @@ public class MemoryMcpServerTools {
     public Map<String, Object> memory(
             @ToolParam(description = "SQL statement(s) to execute against the PostgreSQL memory database") String sql
     ) {
-        var agent = tokenAuthFilter.currentAgent();
+        var agent = authService.current();
         if (agent == null) {
             return Map.of("error", "Unauthorized: missing or invalid access token");
         }

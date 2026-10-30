@@ -34,7 +34,9 @@ spring:
           endpoint and the SHA-256 token to use with it. Then POST {"query": "<SQL SELECT>"} to that endpoint
           with header X-Access-Token set to the returned token; it returns JSON rows. Never expose your raw
           access token - only the hash from get_connection_info. You may embed this endpoint into HTML pages
-          or dashboards you build for the user.
+          or dashboards you build for the user. If the database rejects the query, the endpoint answers
+          HTTP 400 with {"error": "..."} - that is the answer to your request, not a broken transport,
+          so read the message and fix the query instead of retrying it.
         capabilities:
           tool: true
           prompt: false

@@ -4,12 +4,16 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.sql.DriverManager;
 import java.time.Duration;
+import java.util.HexFormat;
 
 import lombok.SneakyThrows;
+import org.junit.jupiter.api.AfterEach;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -98,6 +102,38 @@ public class BaseApplicationTest {
 
     protected String apiUrl() {
         return "http://localhost:" + localServerPort + "/api/query";
+    }
+
+    /** SHA-256 hex hash of an agent token: the public read-only credential of the REST endpoint. */
+    protected static String sha256Hex(String value) {
+        try {
+            var digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /**
+     * Every test starts with an empty database: the agent databases keep whatever a previous test
+     * created (tables, rows, extensions), so without this reset the tests depend on their order.
+     */
+    @AfterEach
+    final void cleanupAgentDatabases() {
+        cleanupDatabase("agent_alpha");
+        cleanupDatabase("agent_beta");
+    }
+
+    @SneakyThrows
+    private static void cleanupDatabase(String database) {
+        var url = DATABASE.getJdbcUrl().replace(DATABASE.getDatabaseName(), database);
+        try (var connection = DriverManager.getConnection(url, DATABASE.getUsername(), DATABASE.getPassword());
+             var statement = connection.createStatement()) {
+            statement.execute("DROP SCHEMA public CASCADE");
+            statement.execute("CREATE SCHEMA public");
+            // A fresh schema belongs to the connecting role, the database owner owns it by default (PostgreSQL 15+).
+            statement.execute("ALTER SCHEMA public OWNER TO pg_database_owner");
+        }
     }
 
     @SneakyThrows

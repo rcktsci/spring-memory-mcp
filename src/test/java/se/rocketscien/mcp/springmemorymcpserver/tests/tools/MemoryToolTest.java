@@ -67,16 +67,7 @@ class MemoryToolTest extends BaseCallToolTest {
 
         var json = getResponseJson(response);
         assertThat(json.get("endpoint").asText()).isEqualTo("http://localhost:8080/api/query");
-
-        String sha;
-        try {
-            sha = HexFormat.of().formatHex(
-                    java.security.MessageDigest.getInstance("SHA-256")
-                            .digest(ALPHA_TOKEN.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-        assertThat(json.get("authentication").asText()).isEqualTo(sha);
+        assertThat(json.get("authentication").asText()).isEqualTo(sha256Hex(ALPHA_TOKEN));
         assertThat(response).doesNotContain(ALPHA_TOKEN);
     }
 
