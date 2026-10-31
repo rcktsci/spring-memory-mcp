@@ -24,6 +24,9 @@ public class BaseApplicationTest {
     protected static final String ALPHA_TOKEN = "550e8400-e29b-41d4-a716-446655440000";
     protected static final String BETA_TOKEN = "550e8400-e29b-41d4-a716-446655440001";
 
+    protected static final String SALT_RO = "test-salt-ro";
+    protected static final String SALT_RW = "test-salt-rw";
+
     protected static final PostgreSQLContainer DATABASE = new PostgreSQLContainer("postgres:18-alpine")
             .withDatabaseName("agent_alpha")
             .withUsername("mcp")
@@ -48,6 +51,8 @@ public class BaseApplicationTest {
         var config = """
                 memory:
                   public-url: "http://localhost:8080"
+                  salt-ro: "%s"
+                  salt-rw: "%s"
                   agents:
                     - token: "%s"
                       host: "%s"
@@ -62,6 +67,7 @@ public class BaseApplicationTest {
                       username: "%s"
                       password: "%s"
                 """.formatted(
+                SALT_RO, SALT_RW,
                 ALPHA_TOKEN, DATABASE.getHost(), DATABASE.getMappedPort(5432),
                 DATABASE.getDatabaseName(), DATABASE.getUsername(), DATABASE.getPassword(),
                 BETA_TOKEN, DATABASE.getHost(), DATABASE.getMappedPort(5432),
@@ -104,7 +110,21 @@ public class BaseApplicationTest {
         return "http://localhost:" + localServerPort + "/api/query";
     }
 
-    /** SHA-256 hex hash of an agent token: the public read-only credential of the REST endpoint. */
+    protected String dataUrl() {
+        return "http://localhost:" + localServerPort + "/api/data";
+    }
+
+    /** The read token: SHA-256 hex of {@code lowercase uuid + ":" + saltRo}. */
+    protected static String roToken(String agentToken) {
+        return sha256Hex(agentToken.toLowerCase() + ":" + SALT_RO);
+    }
+
+    /** The write token: SHA-256 hex of {@code lowercase uuid + ":" + saltRw}. */
+    protected static String rwToken(String agentToken) {
+        return sha256Hex(agentToken.toLowerCase() + ":" + SALT_RW);
+    }
+
+    /** SHA-256 hex hash of an agent token: the MCP credential, never valid on the REST endpoints. */
     protected static String sha256Hex(String value) {
         try {
             var digest = MessageDigest.getInstance("SHA-256");

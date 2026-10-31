@@ -33,13 +33,17 @@ public class MemoryMcpServerTools {
 
     @Tool(
             name = "get_connection_info",
-            description = "Public read-only credentials for sharing memory data with the user. " +
-                    "Returns the public query endpoint and the SHA-256 hex hash of your access token: " +
-                    "call this endpoint with POST, header X-Access-Token set to the hash and body {\"query\": \"<SQL SELECT>\"}. " +
-                    "It is strictly read-only (enforced by PostgreSQL READ ONLY transaction) and safe to embed into " +
-                    "HTML pages and dashboards for the user. Never expose your raw access token - only this hash. " +
-                    "A query the database rejects answers HTTP 400 with {\"error\": \"...\"}: that is the answer to " +
-                    "your request, not a broken transport - read the message and fix the query instead of retrying it."
+            description = "Credentials for sharing memory data with the user and for loading bulk data. " +
+                    "Returns two endpoints with their tokens. query_endpoint + query_token is strictly read-only " +
+                    "(enforced by a PostgreSQL READ ONLY transaction) and safe to embed into HTML pages and " +
+                    "dashboards: POST {\"query\": \"<SQL SELECT>\"} with header X-Access-Token set to query_token. " +
+                    "write_endpoint + write_token loads a file from the shell without passing it through the model: " +
+                    "POST the body with Content-Type text/csv or application/json, header Authorization: Bearer " +
+                    "<write_token>, header X-Target-Table: [schema.]table and optionally X-Function-Name: " +
+                    "[schema.]function. Never expose your raw access token - only these derived tokens. " +
+                    "The write token must never be embedded into a page or shown to the user. " +
+                    "A request the database rejects answers HTTP 400 with {\"error\": \"...\"}: that is the answer " +
+                    "to your request, not a broken transport - read the message and fix the request instead of retrying it."
     )
     public Map<String, Object> getConnectionInfo() {
         var agent = authService.current();
@@ -48,8 +52,10 @@ public class MemoryMcpServerTools {
         }
 
         return Map.of(
-                "endpoint", memoryConfig.getPublicUrl() + "/api/query",
-                "authentication", AuthService.sha256Hex(agent.token())
+                "query_endpoint", memoryConfig.getPublicUrl() + "/api/query",
+                "query_token", authService.readToken(agent),
+                "write_endpoint", memoryConfig.getPublicUrl() + "/api/data",
+                "write_token", authService.writeToken(agent)
         );
     }
 

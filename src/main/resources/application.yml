@@ -21,6 +21,9 @@ spring:
           create any tables, views, materialized views, functions, procedures, triggers, sequences and
           indexes; enable extensions (CREATE EXTENSION); and store any data in any form.
           Data persists between sessions and conversations - nothing is reset unless you drop it.
+          Schemas: organize the knowledge in schemas as you see fit - and describe them. A good
+          practice is to keep the description of the schema for your knowledge in AGENTS.md, so a
+          future session reads the layout instead of guessing it.
           Recommended: first inspect what you already have
           (SELECT table_schema, table_name FROM information_schema.tables
           WHERE table_schema NOT IN ('pg_catalog', 'information_schema') ORDER BY 1, 2),
@@ -30,12 +33,21 @@ spring:
           Mandatory convention: every object you create - tables, columns, indexes, views, procedures -
           must get a COMMENT (COMMENT ON TABLE / COLUMN / INDEX / VIEW / FUNCTION) explaining its purpose,
           so any future session can understand the schema without guessing.
-          Sharing results with the user: call the get_connection_info tool - it returns the public read-only
-          endpoint and the X-Access-Token header value to use with it. Then POST {"query": "<SQL SELECT>"}
-          to that endpoint with header X-Access-Token set to the returned value; it returns JSON rows.
-          You may embed this endpoint into HTML pages or dashboards you build for the user. If the database
-          rejects the query, the endpoint answers HTTP 400 with {"error": "..."} - that is the answer to
-          your request, not a broken transport, so read the message and fix the query instead of retrying it.
+          Sharing results with the user: call the get_connection_info tool - it returns two endpoints,
+          each with its own token. query_endpoint with query_token is the read-only endpoint for pages:
+          POST {"query": "<SQL SELECT>"} with header X-Access-Token set to query_token; it returns JSON
+          rows, and you may embed it into HTML pages or dashboards you build for the user.
+          write_endpoint with write_token loads bulk data from the shell. POST the file itself as the
+          body with Content-Type text/csv (a header row names the columns) or application/json (an
+          array of objects), headers Authorization: Bearer <write_token> and X-Target-Table:
+          [schema.]table, plus optionally X-Function-Name: [schema.]function to call a no-argument
+          function or procedure right after the load in the same transaction. The answer is
+          {"rows_received": N, "rows_ignored": N, "rows_written": N, "result": ...}. The write token is
+          for the shell only and must never be embedded into a page or shown to the user - the
+          read-only token is the only one for pages.
+          If the database rejects a request, the endpoint answers HTTP 400 with {"error": "..."} - that
+          is the answer to your request, not a broken transport, so read the message and fix the query
+          instead of retrying it.
         capabilities:
           tool: true
           prompt: false

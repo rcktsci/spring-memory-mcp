@@ -12,9 +12,6 @@ import se.rocketscien.mcp.springmemorymcpserver.connections.AuthService;
 import se.rocketscien.mcp.springmemorymcpserver.connections.AgentConnectionsManager;
 
 import java.sql.ResultSetMetaData;
-import java.sql.SQLException;
-import java.sql.SQLNonTransientConnectionException;
-import java.sql.SQLTransientConnectionException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -70,29 +67,9 @@ public class ReadOnlyQueryController {
             // The error is reported with a non-2xx status: a rejected query (read-only, bad SQL)
             // must not look like a successful response to the caller. A database that cannot be
             // reached is not the caller's mistake, so it gets 503 and can be retried.
-            var status = isConnectionFailure(e) ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.BAD_REQUEST;
+            var status = SqlErrors.isConnectionFailure(e) ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.BAD_REQUEST;
             var message = e.getMessage() != null ? e.getMessage() : e.toString();
             return ResponseEntity.status(status).body(Map.of("error", message));
         }
-    }
-
-    /**
-     * SQLState class 08 is "connection exception", 53 is "insufficient resources" and 57P01/57P03 mean
-     * that the server is shutting down: in all of them the request can be retried later.
-     */
-    private static boolean isConnectionFailure(Exception e) {
-        for (Throwable cause = e; cause != null; cause = cause.getCause()) {
-            if (cause instanceof SQLTransientConnectionException || cause instanceof SQLNonTransientConnectionException) {
-                return true;
-            }
-            if (cause instanceof SQLException sqlException) {
-                var sqlState = sqlException.getSQLState();
-                if (sqlState != null && (sqlState.startsWith("08") || sqlState.startsWith("53")
-                        || sqlState.equals("57P01") || sqlState.equals("57P03"))) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 }

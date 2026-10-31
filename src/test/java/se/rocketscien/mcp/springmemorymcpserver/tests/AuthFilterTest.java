@@ -74,6 +74,13 @@ class AuthFilterTest extends BaseApplicationTest {
         assertThat(response.body()).doesNotContain("${memory.public-url}");
     }
 
+    /** The derived read and write tokens must never open the write-capable MCP endpoint. */
+    @Test
+    void derivedTokensCannotOpenTheMcpEndpoint() throws Exception {
+        assertThat(post(roToken(ALPHA_TOKEN), INITIALIZE, null).statusCode()).isEqualTo(401);
+        assertThat(post(rwToken(ALPHA_TOKEN), INITIALIZE, null).statusCode()).isEqualTo(401);
+    }
+
     /**
      * The public read-only hash must not open the MCP endpoint. The filter decides by the routed path,
      * not by the raw request target, so a path like "/api/../mcp" cannot smuggle the hash into the
@@ -81,7 +88,7 @@ class AuthFilterTest extends BaseApplicationTest {
      */
     @Test
     void hashTokenCannotReachTheMcpEndpointThroughAnApiPath() throws Exception {
-        var response = rawPost("/api/../mcp", sha256Hex(ALPHA_TOKEN));
+        var response = rawPost("/api/../mcp", roToken(ALPHA_TOKEN));
 
         assertThat(statusCode(response)).isIn(401, 404);
     }
@@ -89,7 +96,7 @@ class AuthFilterTest extends BaseApplicationTest {
     /** Percent-encoded dot segments must not help either. */
     @Test
     void hashTokenCannotReachTheMcpEndpointThroughAnEncodedApiPath() throws Exception {
-        var response = rawPost("/api/%2e%2e/mcp", sha256Hex(ALPHA_TOKEN));
+        var response = rawPost("/api/%2e%2e/mcp", roToken(ALPHA_TOKEN));
 
         assertThat(statusCode(response)).isIn(401, 404);
     }

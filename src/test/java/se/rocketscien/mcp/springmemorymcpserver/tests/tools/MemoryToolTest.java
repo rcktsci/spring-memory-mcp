@@ -62,12 +62,14 @@ class MemoryToolTest extends BaseCallToolTest {
     }
 
     @Test
-    void getConnectionInfoReturnsEndpointAndSha256OfToken() {
+    void getConnectionInfoReturnsBothEndpointsAndTokens() {
         var response = callTool(ALPHA_TOKEN, "get_connection_info", java.util.Map.of());
 
         var json = getResponseJson(response);
-        assertThat(json.get("endpoint").asText()).isEqualTo("http://localhost:8080/api/query");
-        assertThat(json.get("authentication").asText()).isEqualTo(sha256Hex(ALPHA_TOKEN));
+        assertThat(json.get("query_endpoint").asText()).isEqualTo("http://localhost:8080/api/query");
+        assertThat(json.get("query_token").asText()).isEqualTo(roToken(ALPHA_TOKEN));
+        assertThat(json.get("write_endpoint").asText()).isEqualTo("http://localhost:8080/api/data");
+        assertThat(json.get("write_token").asText()).isEqualTo(rwToken(ALPHA_TOKEN));
         assertThat(response).doesNotContain(ALPHA_TOKEN);
     }
 

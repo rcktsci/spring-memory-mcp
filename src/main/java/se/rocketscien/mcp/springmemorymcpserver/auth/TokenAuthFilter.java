@@ -48,10 +48,14 @@ public class TokenAuthFilter implements Filter {
 
         // The token kind follows the path the request is actually routed to, not the raw request target:
         // the raw target is undecoded, so it can spell a path differently than the one the router uses.
-        // The MCP endpoint takes the agent token, the read-only API takes the SHA-256 hash of it.
-        AgentConfig agent = routedPath(httpRequest).startsWith("/api/")
-                ? authService.resolveByTokenHash(token)
-                : authService.resolve(token);
+        // Each endpoint accepts exactly one credential, with no fall-through: the MCP endpoint takes the
+        // agent UUID, /api/query the read token, /api/data the write token.
+        var role = switch (routedPath(httpRequest)) {
+            case "/api/query" -> AuthService.Role.READ;
+            case "/api/data" -> AuthService.Role.WRITE;
+            default -> AuthService.Role.AGENT;
+        };
+        AgentConfig agent = authService.resolve(token, role);
 
         if (agent == null) {
             unauthorized(httpResponse, "Invalid token");

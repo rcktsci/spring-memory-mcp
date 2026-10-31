@@ -25,7 +25,8 @@ public class WebConfig {
         return new WebMvcConfigurer() {
             @Override
             public void addCorsMappings(CorsRegistry registry) {
-                registry.addMapping("/api/**")
+                // Only the read endpoint is callable from a browser page: the write endpoint must not be.
+                registry.addMapping("/api/query")
                         .allowedOrigins("*")
                         .allowedMethods("POST", "OPTIONS")
                         .allowedHeaders("Authorization", "X-Access-Token", "Content-Type");
