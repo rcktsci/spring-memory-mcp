@@ -136,7 +136,7 @@ services:
       retries: 10
 
   memory-mcp:
-    image: ghcr.io/rcktsci/spring-memory-mcp:2026-10-31
+    image: ghcr.io/rcktsci/spring-memory-mcp:2026-11-24
     depends_on:
       memory-db:
         condition: service_healthy
@@ -149,6 +149,13 @@ services:
 
 volumes:
   memory-db-data:
+```
+
+The image is published from `main` on every push as
+`ghcr.io/rcktsci/spring-memory-mcp:<date>`, e.g. pull the latest release with:
+
+```sh
+docker pull ghcr.io/rcktsci/spring-memory-mcp:2026-11-24
 ```
 
 `config.yml` next to the compose file:
